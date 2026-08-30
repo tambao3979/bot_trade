@@ -1,0 +1,5 @@
+filename,strategy,has_bias,total_signals,biased_entry_signals,biased_exit_signals,biased_indicators
+TrendPullback.py,TrendPullback,False,20,0,0,
+LiquiditySweep.py,LiquiditySweep,False,20,0,0,
+RangeReversion.py,RangeReversion,False,20,0,0,
+MetaRouter.py,MetaRouter,False,20,0,0,

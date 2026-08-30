@@ -51,3 +51,6 @@ venv/
 # Runtime reports and caches (keep source reports in reports/)
 reports/cache/
 reports/tmp/
+
+# Code analysis cache
+graphify-out/
