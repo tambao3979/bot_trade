@@ -1,0 +1,9 @@
+{
+  "dry_run": true,
+  "dry_run_wallet": 1000,
+  "initial_state": "running",
+  "force_entry_enable": false,
+  "internals": {
+    "process_throttle_secs": 5
+  }
+}

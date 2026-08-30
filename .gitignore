@@ -1,0 +1,53 @@
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.key
+*.secret
+*.pem
+
+# Private configs
+user_data/config/config.live.json
+user_data/config/*.local.json
+user_data/config/config.private.json
+
+# Exchange and API data
+user_data/data/
+
+# Logs
+user_data/logs/
+*.log
+*.log.*
+
+# Database files
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+*.db
+*.db-shm
+*.db-wal
+
+# Risk state (contains runtime PnL data)
+.risk_state.json
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+.venv/
+venv/
+*.coverage
+
+# IDE
+.aider*
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Runtime reports and caches (keep source reports in reports/)
+reports/cache/
+reports/tmp/

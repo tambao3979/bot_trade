@@ -1,0 +1,6 @@
+[lint.per-file-ignores]
+# Freqtrade discovers strategies by the conventional PascalCase filename that
+# matches the public strategy class. Renaming these modules would break existing
+# `-s StrategyName` workflows without improving runtime correctness.
+"user_data/strategies/*.py" = ["N999"]
+"user_data/strategies/base/BaseRiskStrategy.py" = ["N999"]

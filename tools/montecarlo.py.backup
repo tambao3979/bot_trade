@@ -1,0 +1,152 @@
+"""
+Monte Carlo bootstrap of trade results (T15).
+
+Reads the CSV of out‑of‑sample trades produced by `tools/walkforward.py`
+and runs 5,000 bootstrap resamples (configurable via `--iterations`).
+
+For each sample:
+  - Draws N trades with replacement (N = number of original trades)
+  - Computes the compounded equity curve
+  - Records total return, max drawdown, and whether ruin occurred
+    (defined as either total return ≤ -30% or max drawdown ≥ 30%)
+
+Outputs:
+  - report to stdout (default)
+  - or to a file specified with `--output`
+"""
+
+from __future__ import annotations
+
+import argparse
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+
+DEFAULT_ITERATIONS = 5000
+RUIN_THRESHOLD = -0.30  # -30%
+
+
+def compute_drawdown(equity_curve: np.ndarray) -> float:
+    """Maximum drawdown from a cumulative equity array."""
+    if len(equity_curve) == 0 or not np.isfinite(equity_curve).all():
+        return 0.0
+    peak = np.maximum.accumulate(equity_curve)
+    dd = np.divide(peak - equity_curve, peak, out=np.zeros_like(peak), where=peak > 0)
+    return float(np.max(dd))
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Monte Carlo bootstrap of OOS trades (T15)"
+    )
+    parser.add_argument(
+        "--trades-csv",
+        required=True,
+        help="Path to CSV of OOS trades exported by walkforward.py",
+    )
+    parser.add_argument(
+        "--iterations",
+        type=int,
+        default=DEFAULT_ITERATIONS,
+        help=f"Number of bootstrap samples (default: {DEFAULT_ITERATIONS})",
+    )
+    parser.add_argument("--seed", type=int, default=None, help="Random seed")
+    parser.add_argument(
+        "--output",
+        default=None,
+        help="Optional output markdown file; if omitted, prints to stdout",
+    )
+    args = parser.parse_args()
+    if args.iterations <= 0:
+        raise SystemExit("--iterations must be a positive integer")
+
+    trades_path = Path(args.trades_csv)
+    if not trades_path.exists():
+        raise SystemExit(f"Trades CSV not found: {trades_path}")
+
+    df = pd.read_csv(trades_path)
+
+    if "profit_ratio" not in df.columns:
+        if "profit_abs" in df.columns:
+            # Approximate ratio: assume stake = 1 when unavailable
+            df["profit_ratio"] = df["profit_abs"]
+        else:
+            raise SystemExit(
+                "Trades CSV must contain 'profit_ratio' (or 'profit_abs') column."
+            )
+
+    returns = df["profit_ratio"].dropna().astype(float).values
+    if len(returns) == 0:
+        raise SystemExit("No trade returns available in CSV")
+    if not np.isfinite(returns).all():
+        raise SystemExit("Trade returns must all be finite")
+
+    rng = np.random.default_rng(args.seed) if args.seed is not None else np.random.default_rng()
+    n_trades = len(returns)
+
+    total_returns = np.empty(args.iterations)
+    max_drawdowns = np.empty(args.iterations)
+    ruin_count = 0
+
+    for i in range(args.iterations):
+        sample = rng.choice(returns, size=n_trades, replace=True)
+        equity = np.concatenate(([1.0], np.cumprod(1.0 + sample)))
+        total_ret = equity[-1] - 1.0
+        drawdown = compute_drawdown(equity)
+
+        total_returns[i] = total_ret
+        max_drawdowns[i] = drawdown
+
+        if total_ret <= RUIN_THRESHOLD or drawdown >= abs(RUIN_THRESHOLD):
+            ruin_count += 1
+
+    p5 = float(np.percentile(total_returns, 5))
+    p50 = float(np.percentile(total_returns, 50))
+    p95 = float(np.percentile(total_returns, 95))
+
+    dd5 = float(np.percentile(max_drawdowns, 5))
+    dd50 = float(np.percentile(max_drawdowns, 50))
+    dd95 = float(np.percentile(max_drawdowns, 95))
+
+    risk_of_ruin = ruin_count / args.iterations
+
+    lines: list[str] = []
+    lines.append("# Monte Carlo Report")
+    lines.append("")
+    lines.append(f"- Source trades: {trades_path}")
+    lines.append(f"- Iterations: {args.iterations}")
+    lines.append(f"- Trades per sample: {n_trades}")
+    lines.append(f"- Risk‑of‑ruin threshold: {-RUIN_THRESHOLD * 100:.0f}%")
+    lines.append("")
+    lines.append("## Total return percentiles")
+    lines.append(f"- 5th: {p5 * 100:.2f}%")
+    lines.append(f"- 50th: {p50 * 100:.2f}%")
+    lines.append(f"- 95th: {p95 * 100:.2f}%")
+    lines.append("")
+    lines.append("## Max drawdown percentiles")
+    lines.append(f"- 5th: {dd5 * 100:.2f}%")
+    lines.append(f"- 50th: {dd50 * 100:.2f}%")
+    lines.append(f"- 95th: {dd95 * 100:.2f}%")
+    lines.append("")
+    lines.append(f"## Risk of ruin (≤ {-RUIN_THRESHOLD * 100:.0f}%): {risk_of_ruin * 100:.3f}%")
+    lines.append("")
+    lines.append("## Verdict")
+    lines.append(
+        f"- Risk of ruin < 1%: {'PASS' if risk_of_ruin < 0.01 else 'FAIL'} "
+        f"({risk_of_ruin * 100:.3f}%)"
+    )
+
+    report = "\n".join(lines) + "\n"
+
+    if args.output:
+        out_path = Path(args.output)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(report, encoding="utf-8")
+        print(f"Wrote Monte Carlo report to {out_path}")
+    else:
+        print(report)
+
+
+if __name__ == "__main__":
+    main()

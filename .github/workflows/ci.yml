@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master, develop]
+  pull_request:
+    branches: [main, master, develop]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        python-version: ["3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install uv
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+      - name: Install dependencies
+        run: |
+          uv venv
+          source .venv/bin/activate
+          uv pip install -r requirements.txt
+
+      - name: Run ruff
+        run: |
+          source .venv/bin/activate
+          ruff check .
+
+      - name: Run tests
+        run: |
+          source .venv/bin/activate
+          pytest tests/ -v
+
+      - name: Compile strategies
+        run: |
+          source .venv/bin/activate
+          python -m compileall user_data/strategies/ tools/
+
+      - name: List strategies
+        run: |
+          source .venv/bin/activate
+          freqtrade list-strategies -c user_data/config/config.base.json
+
+      - name: Validate config composition
+        run: |
+          source .venv/bin/activate
+          freqtrade show-config -c user_data/config/config.base.json -c user_data/config/config.backtest.json
